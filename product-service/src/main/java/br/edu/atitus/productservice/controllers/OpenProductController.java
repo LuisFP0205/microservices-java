@@ -1,9 +1,12 @@
 package br.edu.atitus.productservice.controllers;
 
 
+import br.edu.atitus.productservice.clients.CurrencyClient;
+import br.edu.atitus.productservice.clients.CurrencyResponse;
 import br.edu.atitus.productservice.entities.ProductEntity;
 import br.edu.atitus.productservice.repositories.ProductRepository;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -15,12 +18,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class OpenProductController {
 
     private final ProductRepository repository;
+    private final CurrencyClient currencyClient;
+    private final CacheManager cacheManager;
 
-    public OpenProductController(ProductRepository repository) {
+    public OpenProductController(ProductRepository repository, CurrencyClient currencyClient, CacheManager cacheManager) {
         super();
         this.repository = repository;
+        this.currencyClient = currencyClient;
+        this.cacheManager = cacheManager;
     }
-
     @Value("${server.port}")
     private String serverPort;
 
@@ -30,11 +36,43 @@ public class OpenProductController {
             @PathVariable String targetCurrency
     ) throws Exception {
 
-        ProductEntity product = repository.findById(idProduct).orElseThrow(() -> new Exception("Product not found"));
+        targetCurrency = targetCurrency.toUpperCase();
+        String nameCache = "product";
+        String keyCache = idProduct + targetCurrency;
 
-        product.setEnviroment("Product-Service running on port: " + serverPort);
-        product.setConvertedPrice(product.getPrice()); // MOCK para teste
+        ProductEntity product = cacheManager.getCache(nameCache).get(keyCache, ProductEntity.class);
+
+
+        if (product == null){
+            product = repository.findById(idProduct).orElseThrow(() -> new Exception("Product not found"));
+            product.setEnviroment("Product-Service running on port: " + serverPort);
+            // product.setConvertedPrice(product.getPrice()); // MOCK para teste
+
+            if (targetCurrency.equals(product.getCurrency())) {
+                product.setConvertedPrice(product.getPrice());
+            }else{
+                CurrencyResponse currency = currencyClient.getCurrency(
+                        product.getPrice(),
+                        product.getCurrency(),
+                        targetCurrency);
+                if (currency != null) {
+                    product.setConvertedPrice(currency.getConvertedValue());
+                    product.setEnviroment(product.getEnviroment() + " | Currency-Service running on port: " + currency.getEnvironment());
+
+                    cacheManager.getCache(nameCache).put(keyCache, product);
+                }else {
+                    product.setConvertedPrice(-1);
+                    product.setEnviroment(product.getEnviroment() + " | Currency unavailable");
+                }
+            }
+        }else {
+            product.setEnviroment("Product-Service running on port: " + serverPort + " | DataSource: Cache");
+
+        }
+
 
         return ResponseEntity.ok(product);
     }
+
+
 }
