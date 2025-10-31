@@ -45,6 +45,11 @@ public class ApiGatewayConfig {
                         .path("/ws/orders/**")
                         .uri("lb://order-service"))
 
+                //Rota para servico de Greeting
+                .route(p -> p
+                        .path("/greeting/**")
+                        .uri("lb://greeting-service"))
+
                 .build();
     }
 }

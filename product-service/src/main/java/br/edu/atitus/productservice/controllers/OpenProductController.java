@@ -99,7 +99,7 @@ public class OpenProductController {
             );
             product.setConvertedPrice(currency.getConvertedValue());
             // Setar o ambiente
-            product.setEnviroment(product.getEnviroment() + " | Currency-Service running on port: " + currency.getEnvironment());}
+            product.setEnviroment("Currency-Service running on port: " + currency.getEnvironment());}
         return ResponseEntity.ok(products);
     }
 
